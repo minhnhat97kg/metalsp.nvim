@@ -31,7 +31,7 @@ It can index code, summarize symbols, explain errors, manage model/provider sele
 
 ```lua
 {
-  dir = "/path/to/metalsp.nvim",
+  url = "https://github.com/minhnhat97kg/metalsp.nvim",
   config = function()
     require("metalsp").setup({})
   end,
@@ -41,7 +41,7 @@ It can index code, summarize symbols, explain errors, manage model/provider sele
 ### git clone
 
 ```sh
-git clone https://github.com/<you>/metalsp.nvim ~/.local/share/nvim/site/pack/metal/start/metalsp.nvim
+git clone https://github.com/minhnhat97kg/metalsp.nvim ~/.local/share/nvim/site/pack/metal/start/metalsp.nvim
 ```
 
 Then in `init.lua`:
@@ -157,7 +157,7 @@ So if you choose OpenAI/Gemini/Ollama once, MetaLSP will reuse it next time.
 ## Development
 
 ```sh
-git clone <repo>
+git clone https://github.com/minhnhat97kg/metalsp.nvim
 cd metalsp.nvim
 git status
 ```
