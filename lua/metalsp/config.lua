@@ -242,6 +242,7 @@ Return: Summary, Risk checklist, Suggested tests, Architecture notes, Uncertaint
     blast_radius = "<leader>mb",    -- Show blast radius
     sandbox_repl = "<leader>mx",    -- Generate sandbox from selection
     knowledge_tree = "<leader>mt",  -- Toggle MetaLSP sidebar
+    chat_add_context = "<leader>ma", -- Add file/selection to chat context
   },
 }
 

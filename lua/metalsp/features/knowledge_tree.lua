@@ -43,6 +43,8 @@ local state = {
   show_variables = false,
   relation_view = nil, -- nil | "calls" | "callers"
   compact = false,     -- toggle for NOW tab compact view
+  chat_context_files = {},
+  chat_context_selections = {},
 }
 
 local function is_valid_win(win)
@@ -1088,6 +1090,49 @@ function sanitize_buffer_lines(lines)
   return out
 end
 
+local function get_visual_selection()
+  local s_start = vim.fn.getpos("'<")
+  local s_end = vim.fn.getpos("'>")
+  local n_lines = math.abs(s_end[2] - s_start[2]) + 1
+  local lines = vim.api.nvim_buf_get_lines(0, s_start[2] - 1, s_end[2], false)
+  if #lines == 0 then return nil end
+  lines[1] = string.sub(lines[1], s_start[3], -1)
+  if n_lines == 1 then
+    lines[n_lines] = string.sub(lines[n_lines], 1, s_end[3] - s_start[3] + 1)
+  else
+    lines[n_lines] = string.sub(lines[n_lines], 1, s_end[3])
+  end
+  return {
+    start_line = s_start[2],
+    end_line = s_end[2],
+    text = table.concat(lines, "\n")
+  }
+end
+
+function M.add_chat_context(is_visual)
+  local bufnr = vim.api.nvim_get_current_buf()
+  local file_path = vim.api.nvim_buf_get_name(bufnr)
+  if file_path == "" then return end
+  file_path = utils.relative_path(file_path)
+
+  if is_visual then
+    local sel = get_visual_selection()
+    if sel then
+      table.insert(state.chat_context_selections, {
+        path = file_path,
+        start_line = sel.start_line,
+        end_line = sel.end_line,
+        text = sel.text
+      })
+      utils.notify("Added selection from " .. file_path .. " to Chat context.", vim.log.levels.INFO)
+    end
+  else
+    state.chat_context_files[file_path] = true
+    utils.notify("Added " .. file_path .. " to Chat context.", vim.log.levels.INFO)
+  end
+  if state.tab == "chat" and is_valid_win(state.chat_win) then render_chat() end
+end
+
 render_chat = function()
   local buf = ensure_buf()
   state.chat_buf = buf
@@ -1104,6 +1149,12 @@ render_chat = function()
   else
     lines[#lines + 1] = string.format("**Context:** project issues available `%d`; no focused symbol", issue_count)
     lines[#lines + 1] = "Ask about current issues, or press `K` on a symbol to add code context."
+  end
+  local num_files = 0
+  for _ in pairs(state.chat_context_files) do num_files = num_files + 1 end
+  local num_sels = #state.chat_context_selections
+  if num_files > 0 or num_sels > 0 then
+    lines[#lines + 1] = string.format("**Pinned Context:** `%d` files, `%d` selections", num_files, num_sels)
   end
   lines[#lines + 1] = ""
   lines[#lines + 1] = "_i/a ask · c clear · C compact · @file:line/URL allowed · q close_"
@@ -1169,7 +1220,24 @@ local function submit_chat()
   local git_context = build_git_context()
   local issues_context = build_issues_context(80)
   local tool_context, tool_lines = build_graph_code_context(state.focus_node, question)
-  local full_context = table.concat({ git_context or "", issues_context or "", state.focus_context or "", tool_context or "" }, "\n\n")
+  
+  local pinned_context_parts = {}
+  if next(state.chat_context_files) then
+    pinned_context_parts[#pinned_context_parts + 1] = "Pinned Files:"
+    for path, _ in pairs(state.chat_context_files) do
+      local content = table.concat(vim.fn.readfile(path) or {}, "\n")
+      pinned_context_parts[#pinned_context_parts + 1] = "File `" .. path .. "`:\n```\n" .. content .. "\n```"
+    end
+  end
+  if #state.chat_context_selections > 0 then
+    pinned_context_parts[#pinned_context_parts + 1] = "Pinned Selections:"
+    for _, sel in ipairs(state.chat_context_selections) do
+      pinned_context_parts[#pinned_context_parts + 1] = "Selection from `" .. sel.path .. "` (lines " .. sel.start_line .. "-" .. sel.end_line .. "):\n```\n" .. sel.text .. "\n```"
+    end
+  end
+  local pinned_context = table.concat(pinned_context_parts, "\n\n")
+
+  local full_context = table.concat({ git_context or "", issues_context or "", state.focus_context or "", tool_context or "", pinned_context }, "\n\n")
 
   state.chat_lines[#state.chat_lines + 1] = "### You"
   state.chat_lines[#state.chat_lines + 1] = question
@@ -1550,6 +1618,7 @@ function M.show_actions_palette()
     { label = "v: Toggle Variables display (NOW tab)", action = M.toggle_variables },
     { label = "p: Pin current symbol", action = M.pin_focus },
     { label = "u: Unpin current symbol", action = M.unpin_focus },
+    { label = "a: Add current file/selection to chat context", action = function() M.add_chat_context(false) end },
     { label = "d: Review git diff / changes", action = function() M.review_diff(false) end },
     { label = "cl: Login to Cloud Provider (Copilot/OpenAI/Gemini)", action = function()
       vim.ui.select({ "copilot", "openai", "gemini" }, { prompt = "Select Cloud Provider to login:" }, function(provider)
@@ -2329,6 +2398,8 @@ local function setup_keymaps(buf)
   vim.keymap.set("n", "c", function()
     if state.tab == "chat" then
       state.chat_lines = {}
+      state.chat_context_files = {}
+      state.chat_context_selections = {}
       db.save_chat_session(utils.project_id(state.project_root), state.chat_lines)
       render_chat()
     else

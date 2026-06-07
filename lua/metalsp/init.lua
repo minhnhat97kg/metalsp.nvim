@@ -1014,6 +1014,17 @@ local function register_keymaps(cfg)
       require("metalsp.features.knowledge_tree").open_files()
     end, { desc = "MetaLSP: Files", noremap = true, silent = true })
   end
+
+  if km.chat_add_context then
+    vim.keymap.set("n", km.chat_add_context, function()
+      require("metalsp.features.knowledge_tree").add_chat_context(false)
+    end, { desc = "MetaLSP: Add file to chat context", noremap = true, silent = true })
+    vim.keymap.set("v", km.chat_add_context, function()
+      -- Escape visual mode to update markers
+      vim.cmd("normal! \\<Esc>")
+      require("metalsp.features.knowledge_tree").add_chat_context(true)
+    end, { desc = "MetaLSP: Add selection to chat context", noremap = true, silent = true })
+  end
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
